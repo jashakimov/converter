@@ -1,0 +1,6 @@
+{
+    "port":  "8080",
+    "elecardWebSocket": "localhost:8081",
+    "logPath":  "./",
+    "timeoutSec": 300
+}
