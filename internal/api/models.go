@@ -62,3 +62,8 @@ var AllowedPresets = []Preset{
 	FR_MP4,
 	FR_TS,
 }
+
+type ChanResult struct {
+	Error   error
+	Message string
+}

@@ -7,6 +7,7 @@ import (
 	"github.com/jashakimov/converter/internal/service/elecard"
 	"go.uber.org/zap"
 	"net/http"
+	"path/filepath"
 	"time"
 )
 
@@ -15,6 +16,7 @@ type api struct {
 	elecardService elecard.Service
 	val            *validator.Validate
 	m              mapper
+	timeout        time.Duration
 }
 
 func RegisterHandler(
@@ -22,38 +24,79 @@ func RegisterHandler(
 	val *validator.Validate,
 	elecardService elecard.Service,
 	lg *zap.SugaredLogger,
+	timeout time.Duration,
 ) {
 	api := api{
 		lg:             lg,
 		elecardService: elecardService,
 		val:            val,
 		m:              mapper{},
+		timeout:        timeout,
 	}
 
 	router.POST("/tasks", api.CreateTask)
 }
 
 func (a *api) CreateTask(ctx *gin.Context) {
-	ctxWithT, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	ctxWithTime, cancel := context.WithTimeout(ctx, a.timeout)
 	defer cancel()
 
-	var request Task
-	if err := ctx.BindJSON(&request); err != nil {
-		a.lg.Error(err)
+	chanResult := make(chan ChanResult)
+	go func() {
+		var request Task
+		if err := ctx.BindJSON(&request); err != nil {
+			a.lg.Error(err)
+			chanResult <- ChanResult{
+				Error: err,
+			}
+			return
+		}
+
+		if err := a.val.Struct(request); err != nil {
+			a.lg.Error(err)
+			chanResult <- ChanResult{
+				Error: err,
+			}
+			return
+		}
+
+		taskResponse, err := a.elecardService.CreateTask(ctxWithTime, a.m.NewCreateTaskRequest(request))
+		if err != nil {
+			a.lg.Error(err)
+			chanResult <- ChanResult{
+				Error: err,
+			}
+			return
+		}
+
+		status, err := a.elecardService.GetStatus(
+			ctxWithTime,
+			a.m.NewGetStatusRequest(taskResponse.SetValue.RetVal.WatchFolder.ID),
+			filepath.Base(request.Path),
+		)
+		if err != nil {
+			a.lg.Error(err)
+			chanResult <- ChanResult{
+				Error: err,
+			}
+			return
+		}
+		chanResult <- ChanResult{
+			Error:   nil,
+			Message: status,
+		}
+	}()
+
+	select {
+	case <-ctxWithTime.Done():
+		ctx.String(http.StatusGatewayTimeout, "%s", "Timeout is expired")
+		return
+	case status := <-chanResult:
+		if status.Error == nil {
+			ctx.String(http.StatusOK, "%s", status.Message)
+		} else {
+			ctx.String(http.StatusBadRequest, "%s", status.Error.Error())
+		}
 		return
 	}
-
-	if err := a.val.Struct(request); err != nil {
-		a.lg.Error(err)
-		ctx.JSON(http.StatusBadRequest, err.Error())
-		return
-	}
-
-	taskResponse, err := a.elecardService.CreateTask(ctxWithT, a.m.NewCreateTaskRequest(request))
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, err.Error())
-		return
-	}
-
-	ctx.JSON(http.StatusOK, taskResponse)
 }

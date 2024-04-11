@@ -21,10 +21,22 @@ func (m *mapper) NewCreateTaskRequest(task Task) elecard.CreateTaskRequest {
 		params = append(params, strconv.Itoa(task.EndMs))
 	}
 
-	data := elecard.CreateTaskRequest{}
-	data.Dispatcher = "1"
-	data.SetValue.Name = "WatchFolderConfig"
-	data.SetValue.Parameter.P = params
+	taskRequest := elecard.CreateTaskRequest{}
+	taskRequest.Dispatcher = "1"
+	taskRequest.SetValue.Name = "WatchFolderConfig"
+	taskRequest.SetValue.Parameter.P = params
 
-	return data
+	return taskRequest
+}
+
+func (m *mapper) NewGetStatusRequest(id string) elecard.GetStatusRequest {
+	statusRequest := elecard.GetStatusRequest{}
+	statusRequest.Dispatcher = "1"
+	statusRequest.GetValue.Name = "WatchFolderConfig"
+	statusRequest.GetValue.Parameter.P = []string{
+		"Queue",
+		id,
+	}
+
+	return statusRequest
 }
