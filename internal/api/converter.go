@@ -51,6 +51,7 @@ func (a *api) CreateTask(ctx *gin.Context) {
 			}
 			return
 		}
+		a.lg.Info("Пришел на вход:", request)
 
 		if err := a.val.Struct(request); err != nil {
 			a.lg.Error(err)
@@ -62,7 +63,6 @@ func (a *api) CreateTask(ctx *gin.Context) {
 
 		taskResponse, err := a.elecardService.CreateTask(ctxWithTime, a.m.NewCreateTaskRequest(request))
 		if err != nil {
-			a.lg.Error(err)
 			chanResult <- ChanResult{
 				Error: err,
 			}
@@ -75,7 +75,6 @@ func (a *api) CreateTask(ctx *gin.Context) {
 			filepath.Base(request.Path),
 		)
 		if err != nil {
-			a.lg.Error(err)
 			chanResult <- ChanResult{
 				Error: err,
 			}

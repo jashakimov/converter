@@ -31,6 +31,7 @@ func main() {
 		gin.Recovery(),
 	)
 
+	logger.Info("Подключение к ", cfg.ElecardWebSocket)
 	webSocketClient := NewWebSocketClient(cfg.ElecardWebSocket)
 	elecardService := elecard.NewService(webSocketClient, logger)
 	api.RegisterHandler(

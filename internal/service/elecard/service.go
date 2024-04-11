@@ -11,6 +11,7 @@ import (
 	"golang.org/x/text/encoding/charmap"
 	"io"
 	"regexp"
+	"time"
 )
 
 type Service interface {
@@ -33,7 +34,9 @@ func (s *service) CreateTask(ctx context.Context, task CreateTaskRequest) (Creat
 		return CreateTaskResponse{}, err
 	}
 
+	s.lg.Info("Добавляем файл в задачу в Elecard:", string(append(XmlHeader, taskRequest...)))
 	if err := s.client.WriteMessage(websocket.TextMessage, append(XmlHeader, taskRequest...)); err != nil {
+		s.lg.Error("Ошибка из Elecard:", err.Error())
 		return CreateTaskResponse{}, err
 	}
 
@@ -41,13 +44,16 @@ func (s *service) CreateTask(ctx context.Context, task CreateTaskRequest) (Creat
 		var taskResponse CreateTaskResponse
 		_, msg, err := s.client.ReadMessage()
 		if err != nil {
+			s.lg.Error("Ошибка чтения из веб-сокета:", err.Error())
 			return CreateTaskResponse{}, err
 		}
 
 		if err := s.decodeXml(msg, &taskResponse); err != nil {
-			fmt.Println("unmarshal:", err)
+			s.lg.Error("Ошибка парсинга:", err.Error(), string(msg))
 			return CreateTaskResponse{}, err
 		}
+
+		s.lg.Info("Получили ответ от Elecard:", string(msg))
 		return taskResponse, nil
 	}
 }
@@ -59,7 +65,9 @@ func (s *service) GetStatus(ctx context.Context, req GetStatusRequest, fileName 
 	}
 
 	for {
+		s.lg.Info("Проверяем статус в Elecard:", string(append(XmlHeader, statusRequest...)))
 		if err := s.client.WriteMessage(websocket.TextMessage, append(XmlHeader, statusRequest...)); err != nil {
+			s.lg.Error("Ошибка из Elecard:", err.Error())
 			return "", err
 		}
 
@@ -67,11 +75,12 @@ func (s *service) GetStatus(ctx context.Context, req GetStatusRequest, fileName 
 		var statusResponse GetStatusResponse
 		_, msg, err := s.client.ReadMessage()
 		if err != nil {
+			s.lg.Error("Ошибка чтения из веб-сокета: ", err.Error())
 			return "", err
 		}
 
 		if err := s.decodeXml(msg, &statusResponse); err != nil {
-			fmt.Println("unmarshal:", err)
+			s.lg.Error("Ошибка парсинга: ", err.Error(), string(msg))
 			return "", err
 		}
 		reg := regexp.MustCompile(`\[(.*?)\]` + " " + fileName)
@@ -80,7 +89,7 @@ func (s *service) GetStatus(ctx context.Context, req GetStatusRequest, fileName 
 			statusCode = matches[i][1]
 		}
 
-		s.lg.Infof("file[%s] status is %s", fileName, statusCode)
+		s.lg.Infof("Статус для файла[%s] - [%s]", fileName, statusCode)
 		switch statusCode {
 		case SuccessStatus:
 			return statusCode, nil
@@ -89,6 +98,8 @@ func (s *service) GetStatus(ctx context.Context, req GetStatusRequest, fileName 
 		case CriticalErrorStatus:
 			return statusCode, errors.New("status is Critical Error")
 		}
+		s.lg.Infof("Повторям запрос через 5 сек")
+		time.Sleep(5 * time.Second)
 	}
 }
 
