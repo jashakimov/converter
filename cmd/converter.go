@@ -20,6 +20,8 @@ import (
 )
 
 func main() {
+	loc, _ := time.LoadLocation("Europe/Moscow")
+	time.Local = loc
 
 	cfg := config.NewConfig(utils.GetConfigPath())
 	logger := NewLogger(cfg)
