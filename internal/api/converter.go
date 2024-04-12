@@ -7,7 +7,8 @@ import (
 	"github.com/jashakimov/converter/internal/service/elecard"
 	"go.uber.org/zap"
 	"net/http"
-	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -43,23 +44,32 @@ func (a *api) CreateTask(ctx *gin.Context) {
 
 	chanResult := make(chan ChanResult)
 	go func() {
-		var request Task
-		if err := ctx.BindJSON(&request); err != nil {
-			a.lg.Error(err)
-			chanResult <- ChanResult{
-				Error: err,
-			}
-			return
-		}
-		a.lg.Info("Пришел на вход:", request)
+		startMs, _ := strconv.Atoi(ctx.Query("startMs"))
+		endMs, _ := strconv.Atoi(ctx.Query("endMs"))
 
-		if err := a.val.Struct(request); err != nil {
-			a.lg.Error(err)
-			chanResult <- ChanResult{
-				Error: err,
-			}
-			return
+		request := Task{
+			Path:    ctx.Query("path"),
+			ID:      ctx.Query("id"),
+			StartMs: startMs,
+			EndMs:   endMs,
 		}
+
+		//if err := ctx.BindJSON(&request); err != nil {
+		//	a.lg.Error(err)
+		//	chanResult <- ChanResult{
+		//		Error: err,
+		//	}
+		//	return
+		//}
+		a.lg.Info("Пришел запрос на вход:", ctx.Request.URL.RawQuery)
+
+		//if err := a.val.Struct(request); err != nil {
+		//	a.lg.Error(err)
+		//	chanResult <- ChanResult{
+		//		Error: err,
+		//	}
+		//	return
+		//}
 
 		taskResponse, err := a.elecardService.CreateTask(ctxWithTime, a.m.NewCreateTaskRequest(request))
 		if err != nil {
@@ -69,10 +79,12 @@ func (a *api) CreateTask(ctx *gin.Context) {
 			return
 		}
 
+		splitted := strings.Split(request.Path, "\\")
+		fileName := splitted[len(splitted)-1]
 		status, err := a.elecardService.GetStatus(
 			ctxWithTime,
 			a.m.NewGetStatusRequest(taskResponse.SetValue.RetVal.WatchFolder.ID),
-			filepath.Base(request.Path),
+			fileName,
 		)
 		if err != nil {
 			chanResult <- ChanResult{

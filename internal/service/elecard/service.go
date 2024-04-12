@@ -97,8 +97,11 @@ func (s *service) GetStatus(ctx context.Context, req GetStatusRequest, fileName 
 			return statusCode, errors.New("status is Fault")
 		case CriticalErrorStatus:
 			return statusCode, errors.New("status is Critical Error")
+		case NotFoundStatus:
+			return statusCode, errors.New("file not found")
 		}
 		s.lg.Infof("Повторям запрос через 5 сек")
+
 		time.Sleep(5 * time.Second)
 	}
 }

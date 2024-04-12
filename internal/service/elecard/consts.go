@@ -11,4 +11,5 @@ const (
 	SuccessStatus       = "Success"
 	FaultStatus         = "Fault"
 	CriticalErrorStatus = "Critical Error"
+	NotFoundStatus      = ""
 )
