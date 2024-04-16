@@ -6,7 +6,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"github.com/gorilla/websocket"
+	"github.com/jashakimov/converter/internal/service/socket"
 	"go.uber.org/zap"
 	"golang.org/x/text/encoding/charmap"
 	"io"
@@ -16,15 +16,15 @@ import (
 
 type Service interface {
 	CreateTask(ctx context.Context, task CreateTaskRequest) (CreateTaskResponse, error)
-	GetStatus(ctx context.Context, status GetStatusRequest, fileName string) (string, error)
+	GetStatus(ctx context.Context, status GetStatusRequest, fileName string, delaySec time.Duration) (string, error)
 }
 
 type service struct {
-	client *websocket.Conn
+	client socket.Service
 	lg     *zap.SugaredLogger
 }
 
-func NewService(client *websocket.Conn, lg *zap.SugaredLogger) *service {
+func NewService(client socket.Service, lg *zap.SugaredLogger) Service {
 	return &service{client: client, lg: lg}
 }
 
@@ -35,30 +35,24 @@ func (s *service) CreateTask(ctx context.Context, task CreateTaskRequest) (Creat
 	}
 
 	s.lg.Info("Добавляем файл в задачу в Elecard:", string(append(XmlHeader, taskRequest...)))
-	if err := s.client.WriteMessage(websocket.TextMessage, append(XmlHeader, taskRequest...)); err != nil {
+	response, err := s.client.Send(append(XmlHeader, taskRequest...))
+	if err != nil {
 		s.lg.Error("Ошибка из Elecard:", err.Error())
 		return CreateTaskResponse{}, err
 	}
 
-	for {
-		var taskResponse CreateTaskResponse
-		_, msg, err := s.client.ReadMessage()
-		if err != nil {
-			s.lg.Error("Ошибка чтения из веб-сокета:", err.Error())
-			return CreateTaskResponse{}, err
-		}
-
-		if err := s.decodeXml(msg, &taskResponse); err != nil {
-			s.lg.Error("Ошибка парсинга:", err.Error(), string(msg))
-			return CreateTaskResponse{}, err
-		}
-
-		s.lg.Info("Получили ответ от Elecard:", string(msg))
-		return taskResponse, nil
+	var taskResponse CreateTaskResponse
+	if err := xml.Unmarshal(response, &taskResponse); err != nil {
+		s.lg.Error("Ошибка парсинга:", err.Error(), string(response))
+		return CreateTaskResponse{}, err
 	}
+
+	s.lg.Info("Получили ответ от Elecard:", string(response))
+	return taskResponse, nil
+
 }
 
-func (s *service) GetStatus(ctx context.Context, req GetStatusRequest, fileName string) (string, error) {
+func (s *service) GetStatus(ctx context.Context, req GetStatusRequest, fileName string, delaySec time.Duration) (string, error) {
 	statusRequest, err := xml.Marshal(req)
 	if err != nil {
 		return "", err
@@ -66,21 +60,16 @@ func (s *service) GetStatus(ctx context.Context, req GetStatusRequest, fileName 
 
 	for {
 		s.lg.Info("Проверяем статус в Elecard:", string(append(XmlHeader, statusRequest...)))
-		if err := s.client.WriteMessage(websocket.TextMessage, append(XmlHeader, statusRequest...)); err != nil {
+		response, err := s.client.Send(append(XmlHeader, statusRequest...))
+		if err != nil {
 			s.lg.Error("Ошибка из Elecard:", err.Error())
 			return "", err
 		}
 
 		var statusCode string
 		var statusResponse GetStatusResponse
-		_, msg, err := s.client.ReadMessage()
-		if err != nil {
-			s.lg.Error("Ошибка чтения из веб-сокета: ", err.Error())
-			return "", err
-		}
-
-		if err := s.decodeXml(msg, &statusResponse); err != nil {
-			s.lg.Error("Ошибка парсинга: ", err.Error(), string(msg))
+		if err := s.decodeXml(response, &statusResponse); err != nil {
+			s.lg.Error("Ошибка парсинга: ", err.Error(), string(response))
 			return "", err
 		}
 		reg := regexp.MustCompile(`\[(.*?)\]` + " " + fileName)
@@ -100,9 +89,8 @@ func (s *service) GetStatus(ctx context.Context, req GetStatusRequest, fileName 
 		case NotFoundStatus:
 			return statusCode, errors.New("file not found")
 		}
-		s.lg.Infof("Повторям запрос через 5 сек")
-
-		time.Sleep(5 * time.Second)
+		s.lg.Infof("Повторям запрос через %d сек", delaySec)
+		time.Sleep(delaySec)
 	}
 }
 

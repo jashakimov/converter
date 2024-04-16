@@ -11,6 +11,7 @@ type Config struct {
 	ElecardWebSocket string `json:"elecardWebSocket,omitempty"`
 	LogPath          string `json:"logPath,omitempty"`
 	TimeoutSec       int    `json:"timeoutSec,omitempty"`
+	RequestDelaySec  int    `json:"requestDelaySec,omitempty"`
 }
 
 func NewConfig(filePath string) Config {

@@ -13,11 +13,9 @@ func (m *mapper) NewCreateTaskRequest(task Task) elecard.CreateTaskRequest {
 		task.ID,
 		task.Path,
 	}
-	if task.StartMs > 0 {
+	if task.StartMs > 0 && task.EndMs > 0 {
 		params = append(params, "")
 		params = append(params, strconv.Itoa(task.StartMs))
-	}
-	if task.EndMs > 0 {
 		params = append(params, strconv.Itoa(task.EndMs))
 	}
 

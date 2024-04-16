@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/jashakimov/converter/internal/config"
 	"github.com/jashakimov/converter/internal/service/elecard"
 	"go.uber.org/zap"
 	"net/http"
@@ -18,6 +19,7 @@ type api struct {
 	val            *validator.Validate
 	m              mapper
 	timeout        time.Duration
+	requestDelay   time.Duration
 }
 
 func RegisterHandler(
@@ -25,14 +27,15 @@ func RegisterHandler(
 	val *validator.Validate,
 	elecardService elecard.Service,
 	lg *zap.SugaredLogger,
-	timeout time.Duration,
+	cfg config.Config,
 ) {
 	api := api{
 		lg:             lg,
 		elecardService: elecardService,
 		val:            val,
 		m:              mapper{},
-		timeout:        timeout,
+		timeout:        time.Duration(cfg.TimeoutSec) * time.Second,
+		requestDelay:   time.Duration(cfg.RequestDelaySec) * time.Second,
 	}
 
 	router.POST("/tasks", api.CreateTask)
@@ -79,12 +82,15 @@ func (a *api) CreateTask(ctx *gin.Context) {
 			return
 		}
 
+		time.Sleep(a.requestDelay)
+
 		splitted := strings.Split(request.Path, "\\")
 		fileName := splitted[len(splitted)-1]
 		status, err := a.elecardService.GetStatus(
 			ctxWithTime,
 			a.m.NewGetStatusRequest(taskResponse.SetValue.RetVal.WatchFolder.ID),
 			fileName,
+			a.requestDelay,
 		)
 		if err != nil {
 			chanResult <- ChanResult{
