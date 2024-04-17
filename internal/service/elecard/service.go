@@ -68,10 +68,11 @@ func (s *service) GetStatus(ctx context.Context, req GetStatusRequest, fileName 
 
 		var statusCode string
 		var statusResponse GetStatusResponse
-		if err := s.decodeXml(response, &statusResponse); err != nil {
+		if err := xml.Unmarshal(response, &statusResponse); err != nil {
 			s.lg.Error("Ошибка парсинга: ", err.Error(), string(response))
 			return "", err
 		}
+		s.lg.Info("Получили ответ от Elecard:", string(response))
 		reg := regexp.MustCompile(`\[(.*?)\]` + " " + fileName)
 		matches := reg.FindAllStringSubmatch(statusResponse.GetValue.RetVal, -1)
 		for i := range matches {

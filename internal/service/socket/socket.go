@@ -11,7 +11,6 @@ type Service interface {
 }
 
 type service struct {
-	conn       *websocket.Conn
 	lg         *zap.SugaredLogger
 	connString string
 }
@@ -25,31 +24,28 @@ func NewService(connString string, lg *zap.SugaredLogger) Service {
 }
 
 func (s *service) Send(request []byte) ([]byte, error) {
-	s.connect()
-	defer s.conn.Close()
+	u := url.URL{Scheme: "ws", Host: s.connString}
+	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		s.lg.Error("Ошибка подключения к веб-сокету:", err.Error())
+		return nil, err
+	}
+	s.lg.Info("Подключение к веб-сокету:", s.connString)
+	defer func() {
+		conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		conn.Close()
+	}()
 
-	//c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-
-	if err := s.conn.WriteMessage(websocket.TextMessage, request); err != nil {
+	if err := conn.WriteMessage(websocket.TextMessage, request); err != nil {
 		s.lg.Error("Ошибка записи в веб-сокет:", err.Error())
 		return nil, err
 	}
 	for {
-		_, msg, err := s.conn.ReadMessage()
+		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			s.lg.Error("Ошибка чтения из веб-сокета:", err.Error())
 			return nil, err
 		}
 		return msg, nil
 	}
-}
-
-func (s *service) connect() {
-	s.lg.Info("Поключаемся к сокету")
-	u := url.URL{Scheme: "ws", Host: s.connString}
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	if err != nil {
-		panic(err)
-	}
-	s.conn = c
 }
