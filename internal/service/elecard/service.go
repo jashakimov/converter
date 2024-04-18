@@ -11,6 +11,7 @@ import (
 	"golang.org/x/text/encoding/charmap"
 	"io"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -52,7 +53,10 @@ func (s *service) CreateTask(ctx context.Context, task CreateTaskRequest) (Creat
 
 }
 
-func (s *service) GetStatus(ctx context.Context, req GetStatusRequest, fileName string, delaySec time.Duration) (string, error) {
+func (s *service) GetStatus(ctx context.Context, req GetStatusRequest, requestPath string, delaySec time.Duration) (string, error) {
+	splitted := strings.Split(requestPath, "\\")
+	fileName := splitted[len(splitted)-1]
+
 	statusRequest, err := xml.Marshal(req)
 	if err != nil {
 		return "", err

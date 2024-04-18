@@ -9,7 +9,6 @@ import (
 	"go.uber.org/zap"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -56,23 +55,15 @@ func (a *api) CreateTask(ctx *gin.Context) {
 			StartMs: startMs,
 			EndMs:   endMs,
 		}
-
-		//if err := ctx.BindJSON(&request); err != nil {
-		//	a.lg.Error(err)
-		//	chanResult <- ChanResult{
-		//		Error: err,
-		//	}
-		//	return
-		//}
 		a.lg.Info("Пришел запрос на вход:", ctx.Request.URL.RawQuery)
 
-		//if err := a.val.Struct(request); err != nil {
-		//	a.lg.Error(err)
-		//	chanResult <- ChanResult{
-		//		Error: err,
-		//	}
-		//	return
-		//}
+		if err := a.val.Struct(request); err != nil {
+			a.lg.Error(err)
+			chanResult <- ChanResult{
+				Error: err,
+			}
+			return
+		}
 
 		taskResponse, err := a.elecardService.CreateTask(ctxWithTime, a.m.NewCreateTaskRequest(request))
 		if err != nil {
@@ -84,12 +75,10 @@ func (a *api) CreateTask(ctx *gin.Context) {
 
 		time.Sleep(a.requestDelay)
 
-		splitted := strings.Split(request.Path, "\\")
-		fileName := splitted[len(splitted)-1]
 		status, err := a.elecardService.GetStatus(
 			ctxWithTime,
 			a.m.NewGetStatusRequest(taskResponse.SetValue.RetVal.WatchFolder.ID),
-			fileName,
+			request.Path,
 			a.requestDelay,
 		)
 		if err != nil {
